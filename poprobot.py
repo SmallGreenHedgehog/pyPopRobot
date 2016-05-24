@@ -50,6 +50,25 @@ class HeadersHandler(object):
             name = self._decode(s)
         return name, addr
 
+    @property
+    def attachmentlist(self):
+        attachlist = []
+        attachlist.clear()
+        for part in self._msg.walk():
+            if part.get_content_maintype() == 'multipart':
+                continue
+            if part.get('Content-Disposition') is None:
+                continue
+            filename = part.get_filename()
+            if not (filename):
+                continue
+            attachlist.append(self._decode(filename))
+        return attachlist
+
+    @property
+    def haveattachments(self):
+        return len(self.attachmentlist) > 0
+
 
 def getparamsfromstring(line):
     params = []
@@ -74,8 +93,14 @@ def getlinesfromconfig():
     return conflines
 
 
+def getalreadyprocmeslist():
+    # TODO реализовать функционал получения листа ранее обработанных id из файла
+    alredyproclist = []
+    return alredyproclist
+
+
 def getfiles(POPServer, POPPort, POPLogin, POPPass, NeedToRemoveMail, localDirForAttach, localDirForLetters,
-             FromInclude, ThemeIclude):
+             fromInclude, themeIclude):
     log.message('*********************************************')
     log.message('Получение файлов:')
     success = 1
@@ -85,31 +110,64 @@ def getfiles(POPServer, POPPort, POPLogin, POPPass, NeedToRemoveMail, localDirFo
     connection.pass_(POPPass)
 
     emails, total_bytes = connection.stat()
-    print("{0} emails in the inbox, {1} bytes total".format(emails, total_bytes))
+    # print("{0} emails in the inbox, {1} bytes total".format(emails, total_bytes))
 
     msg_list = connection.list()
-    print(msg_list)
+    # print(msg_list)
 
-    for i in range(emails):
-        response = connection.retr(i + 1)
-        raw_message = response[1]
+    alreadyprocmeslist = getalreadyprocmeslist()
+    actidlist = []
 
-        str_message = message_from_bytes(b'\n'.join(raw_message))
+    needtestfrom = len(fromInclude) > 0
+    needtesttheme = len(themeIclude) > 0
 
-        headerS = HeadersHandler(str_message)
-        messageid = headerS.mesid
-        from_mail_name, from_mail_addr = headerS.sender
-        subject_mail = headerS.subject
+    if needtestfrom or needtesttheme:
+        needsafeattach = len(localDirForAttach) > 0
+        needsafeletters = len(localDirForLetters) > 0
 
-        print(i)
-        print(messageid)
-        print(from_mail_name + ' | ' + from_mail_addr)
-        print(subject_mail)
+        for i in range(emails):
+            print(i)
 
-        # TODO не обрабатывать повторно
-        # TODO реализовать сохранение тела письма и вложений
+            response = connection.retr(i + 1)
+            raw_message = response[1]
 
-    connection.quit()
+            str_message = message_from_bytes(b'\n'.join(raw_message))
+
+            headerS = HeadersHandler(str_message)
+            messageid = headerS.mesid
+
+            actidlist.append(messageid)  # добавим письмо в список имеющихся в ящике
+
+            from_mail_name, from_mail_addr = headerS.sender
+            subject_mail = headerS.subject
+
+            # теперь проверим
+            needprocess = False
+
+            # TODO не обрабатывать повторно
+
+            if needtestfrom:
+                if (from_mail_addr.find(fromInclude) > -1) or (from_mail_name.find(fromInclude) > -1):
+                    needprocess = True
+
+            if needtesttheme:
+                if subject_mail.find(themeIclude) > -1:
+                    needprocess = True
+
+
+            # TODO реализовать сохранение тела письма и вложений
+
+
+            if needprocess:
+                print(messageid)
+                print(from_mail_name + ' | ' + from_mail_addr)
+                print(subject_mail)
+
+
+
+        connection.quit()
+    else:
+        success = 0
     return success
 
 
