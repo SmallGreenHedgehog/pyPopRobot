@@ -1,3 +1,5 @@
+# -*- coding: utf-8 -*-
+
 import os
 import socks
 import poplib
@@ -99,7 +101,7 @@ def getalreadyprocmeslist():
     return alredyproclist
 
 
-def getfiles(POPServer, POPPort, POPLogin, POPPass, NeedToRemoveMail, localDirForAttach, localDirForLetters,
+def getfiles(POPServer, POPPort, POPLogin, POPPass, removeMail, localDirForAttach, localDirForLetters,
              fromInclude, themeIclude):
     log.message('*********************************************')
     log.message('Получение файлов:')
@@ -112,7 +114,7 @@ def getfiles(POPServer, POPPort, POPLogin, POPPass, NeedToRemoveMail, localDirFo
     emails, total_bytes = connection.stat()
     # print("{0} emails in the inbox, {1} bytes total".format(emails, total_bytes))
 
-    msg_list = connection.list()
+    # msg_list = connection.list()
     # print(msg_list)
 
     alreadyprocmeslist = getalreadyprocmeslist()
@@ -128,9 +130,14 @@ def getfiles(POPServer, POPPort, POPLogin, POPPass, NeedToRemoveMail, localDirFo
         for i in range(emails):
             print(i)
 
-            response = connection.retr(i + 1)
-            raw_message = response[1]
+            # TODO реализовать получение только заголовков
+            response = connection.top(i + 1,0)
+            # print(response)
 
+            # response = connection.retr(i + 1)
+            # print(response)
+
+            raw_message = response[1]
             str_message = message_from_bytes(b'\n'.join(raw_message))
 
             headerS = HeadersHandler(str_message)
@@ -147,11 +154,11 @@ def getfiles(POPServer, POPPort, POPLogin, POPPass, NeedToRemoveMail, localDirFo
             # TODO не обрабатывать повторно
 
             if needtestfrom:
-                if (from_mail_addr.find(fromInclude) > -1) or (from_mail_name.find(fromInclude) > -1):
+                if (from_mail_addr.lower().find(fromInclude) > -1) or (from_mail_name.lower().find(fromInclude) > -1):
                     needprocess = True
 
             if needtesttheme:
-                if subject_mail.find(themeIclude) > -1:
+                if subject_mail.lower().find(themeIclude) > -1:
                     needprocess = True
 
 
@@ -162,7 +169,7 @@ def getfiles(POPServer, POPPort, POPLogin, POPPass, NeedToRemoveMail, localDirFo
                 print(messageid)
                 print(from_mail_name + ' | ' + from_mail_addr)
                 print(subject_mail)
-
+                print(headerS.haveattachments)
 
 
         connection.quit()
@@ -184,17 +191,19 @@ def processline(params):
         POPLogin = POPLoginH  # Логин и пароль храним в открытом виде
         POPPass = POPPassH
 
-    NeedToRemoveMail = params[4]
+    removeMail = params[4]
     localDirForAttach = params[5]
     localDirForLetters = params[6]
-    FromInclude = params[7]
-    ThemeIclude = params[8]
+    fromInclude = params[7].encode('cp1251').decode().lower()
+    themeIclude = params[8].encode('cp1251').decode().lower()
+
     SigFilePath = params[9]
     SigText = params[10]
 
+
     # Получим файлы
-    succes = getfiles(POPServer, POPPort, POPLogin, POPPass, NeedToRemoveMail, localDirForAttach, localDirForLetters,
-                      FromInclude, ThemeIclude)
+    succes = getfiles(POPServer, POPPort, POPLogin, POPPass, removeMail, localDirForAttach, localDirForLetters,
+                      fromInclude, themeIclude)
 
     if succes == 1:  # Если задание выполнено успешно - генерируем сигнальный файл по необходимости
         if not (SigText == ''):
